@@ -1,5 +1,4 @@
 from simpletransformers.classification import ClassificationModel, ClassificationArgs
-import pandas as pd
 import numpy as np
 
 import torch
@@ -24,39 +23,8 @@ do_lower_case = False
 saved = False
 save_folder = f'./models/roberta_base_confronto_Attardi'
 
-LABELS = {
-    'agree': 0,
-    'disagree': 1,
-    'discuss': 2,
-    'unrelated': 3
-}
 
-#dataset pre-processing
-train_stances_set = pd.read_csv("data_simple/combined_train_stances.csv")
-test_stances_set = pd.read_csv("data_simple/combined_test_stances.csv")
-train_bodies_set = pd.read_csv("data_simple/combined_train_bodies.csv")
-test_bodies_set = pd.read_csv("data_simple/combined_test_bodies.csv")
-
-train = train_stances_set.set_index('Body ID').join(train_bodies_set.set_index('Body ID'),lsuffix='_caller', rsuffix='_other')
-test = test_stances_set.set_index('Body ID').join(test_bodies_set.set_index('Body ID'),lsuffix='_caller', rsuffix='_other')
-train = train.reset_index()
-test = test.reset_index()
-
-train = train.replace({'Stance': LABELS})
-train.pop('Body ID')
-train.columns = ["text_a", "labels", "text_b"]
-train = train[['text_a', 'text_b', 'labels']]
-y_train = train['labels']
-
-test = test.replace({'Stance': LABELS})
-test.pop('Body ID')
-y_test = test.pop('Stance')
-test.columns = ["text_a", 'text_b']
-
-
-X_test = test.values.tolist()
-
-X_train = train
+X_train, y_train, X_test, y_test = load_datasets()
 
 if not debug:
     if not saved:
@@ -77,13 +45,9 @@ if not debug:
                                         no_save = False,
                                         save_eval_checkpoints = False,
                                         save_model_every_epoch = True,
-                                        save_optimizer_and_scheduler = False,
-                                        # sliding_window = True, # only if window is to be used
-                                        # stride = 0.8, # stride * max_seq_len step between windows
-                                        # tie_value = 3
+                                        save_optimizer_and_scheduler = False
                                     )
 
-        # Create a ClassificationModel
         model = ClassificationModel(model_name,
                                     model_type,
                                     num_labels = 4,
@@ -105,64 +69,15 @@ if not debug:
 
     conf_mat = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
     for i in range(0,len(predictions)):
-        conf_mat[y_test[i]][predictions[i]] = conf_mat[y_test[i]][predictions[i]] + 1
+        conf_mat[y_test[i]][predictions[i]] += 1
 
     confusion_matrix = np.array(conf_mat)
-
-    def process_cm(confusion_mat, i=0, to_print=True):
-        # i means which class to choose to do one-vs-the-rest calculation
-        # rows are actual obs whereas columns are predictions
-        tp = confusion_mat[i,i]  # correctly labeled as i
-        fp = confusion_mat[:,i].sum() - tp  # incorrectly labeled as i
-        fn = confusion_mat[i,:].sum() - tp  # incorrectly labeled as non-i
-        tn = confusion_mat.sum().sum() - tp - fp - fn
-        if to_print:
-            print('TP: {}'.format(tp))
-            print('FP: {}'.format(fp))
-            print('FN: {}'.format(fn))
-            print('TN: {}'.format(tn))
-
-        prec = tp/(tp+fp)
-        recall = tp/(tp+fn)
-        f1 = 2*(prec*recall)/(prec+recall)
-
-        print(f"Accuracy class {i} : {(tp+tn)/(tp+tn+fp+fn)}")
-        print(f"f1 score class {i} : {f1}\n")
-
-    for i in range(4):
-        print('Calculating 2x2 contigency table for label{}'.format(i))
-        process_cm(confusion_matrix, i, to_print=False)
 
     report_score(y_test, predictions)
     print()
 
-    def compute_fp(cm, i):
-        fp = 0
-        for j in range(len(cm)):
-            fp += cm[j][i]
-
-        return fp-cm[i][i]
-
-
-    def compute_tn(cm, i):
-        total = 0
-        for j in range(len(cm)):
-            total = total + sum(cm[j]) - cm[j][i]
-
-        return total - sum(cm[i]) + cm[i][i]
-
-    for i in range(0,4) :
-        tp = conf_mat[i][i]
-        fp = compute_fp(conf_mat, i)
-        fn = sum(conf_mat[i]) - conf_mat[i][i]
-        tn = compute_tn(conf_mat, i)
-
-        prec = tp/(tp+fp)
-        recall = tp/(tp+fn)
-        f1 = 2*(prec*recall)/(prec+recall)
-
-        print(f"Accuracy class {i} : {(tp+tn)/(tp+tn+fp+fn)}")
-        print(f"f1 score class {i} : {f1}\n")
+    for i in range(4):
+        process_cm(confusion_matrix, i, print_stats=False)
 
     print()
     print("----- Model accuracy -----")

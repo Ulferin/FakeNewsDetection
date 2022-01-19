@@ -1,8 +1,61 @@
 from sklearn.metrics import accuracy_score, f1_score
+from sklearn import feature_extraction
+
+import tensorflow as tf
+from keras import regularizers
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import Dropout
+
+import numpy as np
+import pandas as pd
+
+from scipy import spatial
+import re
+import nltk
+from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+_wnl = nltk.WordNetLemmatizer()
 
 LABELS = ['agree', 'disagree', 'discuss', 'unrelated']
+LABELS_dict = {
+    'agree': 0,
+    'disagree': 1,
+    'discuss': 2,
+    'unrelated': 3
+}
+
 LABELS_RELATED = ['unrelated','related']
 RELATED = LABELS[0:3]
+
+def load_datasets():
+    #dataset pre-processing
+    train_stances_set = pd.read_csv("data_simple/combined_train_stances.csv")
+    test_stances_set = pd.read_csv("data_simple/combined_test_stances.csv")
+    train_bodies_set = pd.read_csv("data_simple/combined_train_bodies.csv")
+    test_bodies_set = pd.read_csv("data_simple/combined_test_bodies.csv")
+
+    train = train_stances_set.set_index('Body ID').join(train_bodies_set.set_index('Body ID'),lsuffix='_caller', rsuffix='_other')
+    test = test_stances_set.set_index('Body ID').join(test_bodies_set.set_index('Body ID'),lsuffix='_caller', rsuffix='_other')
+    train = train.reset_index()
+    test = test.reset_index()
+
+    train = train.replace({'Stance': LABELS})
+    train.pop('Body ID')
+    train.columns = ["text_a", "labels", "text_b"]
+    train = train[['text_a', 'text_b', 'labels']]
+    y_train = train['labels']
+
+    test = test.replace({'Stance': LABELS})
+    test.pop('Body ID')
+    y_test = test.pop('Stance')
+    test.columns = ["text_a", 'text_b']
+
+
+    X_test = test.values.tolist()
+
+    X_train = train
+    return X_train, y_train, X_test, y_test
+
 
 def get_accuracy(y_predicted, y_true, stance=False):
     # if stance == False convert into 2-class-problem
@@ -48,6 +101,7 @@ def get_f1score(y_predicted, y_true, stance=False):
 
     else:
         return f1_score(y_true, y_predicted, average='macro')
+
 
 def score_submission(gold_labels, test_labels):
     score = 0.0
@@ -98,31 +152,30 @@ def report_score(actual,predicted):
     return score*100/best_score
 
 
+def process_cm(confusion_mat, i=0, print_stats=True):
+        # i means which class to choose to do one-vs-the-rest calculation
+        # rows are actual obs whereas columns are predictions
+        tp = confusion_mat[i,i]  # correctly labeled as i
+        fp = confusion_mat[:,i].sum() - tp  # incorrectly labeled as i
+        fn = confusion_mat[i,:].sum() - tp  # incorrectly labeled as non-i
+        tn = confusion_mat.sum().sum() - tp - fp - fn
+        if print_stats:
+            print('TP: {}'.format(tp))
+            print('FP: {}'.format(fp))
+            print('FN: {}'.format(fn))
+            print('TN: {}'.format(tn))
+
+        prec = tp/(tp+fp)
+        recall = tp/(tp+fn)
+        f1 = 2*(prec*recall)/(prec+recall)
+
+        print(f"Accuracy class {i} : {(tp+tn)/(tp+tn+fp+fn)}")
+        print(f"f1 score class {i} : {f1}\n")
 
 
-
-from sklearn.metrics import accuracy_score, f1_score
-from sklearn import feature_extraction
-
-import tensorflow as tf
-from keras import regularizers
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import Dropout
-
-import pandas as pd
-import numpy as np
-
-from scipy import spatial
-import re
-import nltk
-from gensim.models.doc2vec import Doc2Vec, TaggedDocument
-_wnl = nltk.WordNetLemmatizer()
-
-
-
-
-
+##########################
+# --- UCLMR UTILITIES ---
+##########################
 def clean(s):
     # Cleans a string: Lowercasing, trimming, removing non-alphanumeric
 
@@ -145,6 +198,7 @@ def word_overlap_features(df):
             len(set(clean_head).intersection(clean_body)) / float(len(set(clean_head).union(clean_body)))]
         X.append(features)
     return X
+
 
 def refuting_features(df):
     _refuting_words = [
@@ -170,6 +224,7 @@ def refuting_features(df):
         features = [1 if word in clean_head else 0 for word in _refuting_words]
         X.append(features)
     return X
+
 
 def polarity_features(df):
     _refuting_words = [
@@ -201,9 +256,11 @@ def polarity_features(df):
         X.append(features)
     return np.array(X)
 
+
 def remove_stopwords(l):
     # Removes stopwords from a list of tokens
     return [w for w in l if w not in feature_extraction.text.ENGLISH_STOP_WORDS]
+
 
 def ngrams(input, n):
     input = input.split(' ')
@@ -305,6 +362,7 @@ def hand_features(df):
 
     return X
 
+
 def CreateModel(neurons,reg,drop, input_dim):
     model = Sequential()
     model.add(Dense(neurons, activation='relu', kernel_regularizer=regularizers.l2(l2=reg),bias_regularizer =regularizers.l2(l2=reg),activity_regularizer = regularizers.l2(l2=reg),input_dim=input_dim))
@@ -314,6 +372,7 @@ def CreateModel(neurons,reg,drop, input_dim):
     model.add(tf.keras.layers.Softmax())
     model.compile(loss='SparseCategoricalCrossentropy', optimizer= tf.keras.optimizers.Adam(learning_rate=0.01))
     return model
+
 
 def doc_2_vec_features(df, vec_size = 3000, win_size = 5):
     docs = []
@@ -328,6 +387,7 @@ def doc_2_vec_features(df, vec_size = 3000, win_size = 5):
     #da cambiare i vari parametri
     model = Doc2Vec(tagged_docs, vector_size=vec_size, window=win_size, min_count=1, workers=-1, epochs = 50)
     return model
+
 
 def doc_2_vec_extract(df,model):
     doc2vect_features = []
