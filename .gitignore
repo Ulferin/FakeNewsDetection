@@ -1,1 +1,8 @@
 *.ipynb
+models/
+outputs/
+runs/
+cache_dir/
+__pycache__*
+
+

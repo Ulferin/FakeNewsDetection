@@ -39,13 +39,13 @@ def load_datasets():
     train = train.reset_index()
     test = test.reset_index()
 
-    train = train.replace({'Stance': LABELS})
+    train = train.replace({'Stance': LABELS_dict})
     train.pop('Body ID')
     train.columns = ["text_a", "labels", "text_b"]
     train = train[['text_a', 'text_b', 'labels']]
     y_train = train['labels']
 
-    test = test.replace({'Stance': LABELS})
+    test = test.replace({'Stance': LABELS_dict})
     test.pop('Body ID')
     y_test = test.pop('Stance')
     test.columns = ["text_a", 'text_b']
