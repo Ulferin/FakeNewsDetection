@@ -5,27 +5,27 @@ import torch
 
 from utils import *
 
-ckp = False
 
 # model_name = 'bigbird'
 # model_type = "google/bigbird-roberta-base"
 model_name = 'roberta'
-# model_type = "roberta-base"
-model_type = "roberta-large"
+model_type = "roberta-base"
+# model_type = "roberta-large"
 # model_name = 'longformer'
 # model_type = "allenai/longformer-base-4096"
 
 train_ep = 5
-learning_rate = 1e-5
-pol_dec_end = 1e-7
-pol_dec_pow = 1.0
+learning_rate = 5e-6
+pol_dec_end = 1e-9
+pol_dec_pow = 0.2
 max_seq_len = 512
 batch_size = 4
 proc_count = 8
 do_lower_case = False
 
+ckp = False
 saved = False
-save_folder = f'./models/roberta-large_5ep_4bs_1e-5_1e-7'
+save_folder = f'./models/roberta_base_lowLR'
 
 
 X_train, y_train, X_test, y_test = load_datasets()
@@ -44,9 +44,9 @@ model_args = ClassificationArgs(num_train_epochs=train_ep,
                                 train_batch_size = batch_size,
                                 max_seq_length = max_seq_len,
                                 fp16 = True,
-                                no_save = False,
+                                no_save = True,
                                 save_eval_checkpoints = False,
-                                save_model_every_epoch = True,
+                                save_model_every_epoch = False,
                                 save_optimizer_and_scheduler = False
             )
 if not ckp:
