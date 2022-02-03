@@ -140,16 +140,16 @@ def print_confusion_matrix(cm):
         lines.append("|{:^11}|{:^11}|{:^11}|{:^11}|{:^11}|".format(LABELS[i],
                                                                    *row))
         lines.append("-"*line_len)
-    print('\n'.join(lines))
+    return '\n'.join(lines)
 
 
 def report_score(actual,predicted):
     score,cm = score_submission(actual,predicted)
     best_score, _ = score_submission(actual,actual)
 
-    print_confusion_matrix(cm)
+    cm_s = print_confusion_matrix(cm)
     print("Score: " +str(score) + " out of " + str(best_score) + "\t("+str(score*100/best_score) + "%)")
-    return score*100/best_score
+    return cm_s, score*100/best_score
 
 
 def process_cm(confusion_mat, i=0, print_stats=True):
@@ -169,8 +169,10 @@ def process_cm(confusion_mat, i=0, print_stats=True):
         recall = tp/(tp+fn)
         f1 = 2*(prec*recall)/(prec+recall)
 
-        print(f"Accuracy class {i} : {(tp+tn)/(tp+tn+fp+fn)}")
-        print(f"f1 score class {i} : {f1}\n")
+        acc = f"Accuracy class {i} : {(tp+tn)/(tp+tn+fp+fn)}\n"
+        f1_s = f"f1 score class {i} : {f1}\n\n"
+
+        return acc, f1_s
 
 
 ##########################
