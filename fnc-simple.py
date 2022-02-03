@@ -6,11 +6,8 @@ import torch
 from utils import *
 
 
-# model_name = 'bigbird'
-# model_type = "google/bigbird-roberta-base"
-model_name = 'roberta'
-model_type = "roberta-base"
-# model_type = "roberta-large"
+# model_name = 'roberta'
+# model_type = "roberta-base"
 # model_name = 'longformer'
 # model_type = "allenai/longformer-base-4096"
 
@@ -113,9 +110,12 @@ def train_transformer(configuration):
                                     no_save = True,
                                     save_eval_checkpoints = False,
                                     save_model_every_epoch = False,
-                                    save_optimizer_and_scheduler = False
+                                    save_optimizer_and_scheduler = False,
+                                    scheduler='polynomial_decay_schedule_with_warmup'
                 )
     if not ckp:
+        # TODO: magari qui cambiare con "se il modello già esiste su disco"
+        #       invece che basarsi su parametro
         if not saved:
             model = ClassificationModel(model_name,
                                         model_type,
