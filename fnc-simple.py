@@ -16,60 +16,16 @@ do_lower_case = False
 
 configurations = [
 
-    # Comparison test 2 batch vs 4 batch
     {
         'model_name': 'roberta',
         'model_type': 'roberta-base',
-        'train_ep': 3,
+        'train_ep': 5,
         'learning_rate': 1e-5,
         'pol_dec_end': 1e-7,
-        'pol_dec_pow': 1.0,
+        'pol_dec_pow': 1.2,
         'max_seq_len': 512,
         'batch_size': 4,
-    },
-
-    # Decreasing learning rate tests
-    {
-        'model_name': 'roberta',
-        'model_type': 'roberta-base',
-        'train_ep': 5,
-        'learning_rate': 5e-6,
-        'pol_dec_end': 1e-7,
-        'pol_dec_pow': 1.0,
-        'max_seq_len': 512,
-        'batch_size': 4,
-    },
-    {
-        'model_name': 'roberta',
-        'model_type': 'roberta-base',
-        'train_ep': 5,
-        'learning_rate': 5e-6,
-        'pol_dec_end': 1e-9,
-        'pol_dec_pow': 1.0,
-        'max_seq_len': 512,
-        'batch_size': 4,
-    },
-
-    # Higher learning rate tests
-    {
-        'model_name': 'roberta',
-        'model_type': 'roberta-base',
-        'train_ep': 5,
-        'learning_rate': 5e-5,
-        'pol_dec_end': 1e-7,
-        'pol_dec_pow': 1.0,
-        'max_seq_len': 512,
-        'batch_size': 4,
-    },
-    {
-        'model_name': 'roberta',
-        'model_type': 'roberta-base',
-        'train_ep': 5,
-        'learning_rate': 1e-4,
-        'pol_dec_end': 1e-7,
-        'pol_dec_pow': 1.0,
-        'max_seq_len': 512,
-        'batch_size': 4,
+        'scheduler': 'polynomial_decay_schedule_with_warmup'
     },
     
 ]
@@ -88,6 +44,7 @@ def train_transformer(configuration):
     pol_dec_pow = configuration['pol_dec_pow']
     max_seq_len = configuration['max_seq_len']
     batch_size = configuration['batch_size']
+    scheduler = configuration['scheduler']
 
     save_folder = f'./models/{model_type}_{batch_size}batch_{learning_rate}_{pol_dec_end}_{pol_dec_pow}'
 
@@ -111,7 +68,7 @@ def train_transformer(configuration):
                                     save_eval_checkpoints = False,
                                     save_model_every_epoch = False,
                                     save_optimizer_and_scheduler = False,
-                                    scheduler='polynomial_decay_schedule_with_warmup'
+                                    scheduler=scheduler
                 )
     if not ckp:
         # TODO: magari qui cambiare con "se il modello già esiste su disco"
