@@ -6,8 +6,8 @@ import torch
 from utils import *
 
 
-model = 'roberta'  # Configuration to be executed
-saved = True   # Set to True to recover an existing model
+model = 'deberta'  # Configuration to be executed
+saved = False   # Set to True to recover an existing model
 
 
 # Best configurations for each of the tested models

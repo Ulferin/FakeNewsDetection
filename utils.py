@@ -13,7 +13,10 @@ LABELS_dict = {
 RELATED = LABELS[0:3]
 
 def load_datasets():
-    #dataset pre-processing
+    """Loads and preprocess the combined traininig and test datasets.
+    Returns the polished datasets and labels. 
+    """
+
     train_stances_set = pd.read_csv("data_simple/combined_train_stances.csv")
     test_stances_set = pd.read_csv("data_simple/combined_test_stances.csv")
     train_bodies_set = pd.read_csv("data_simple/combined_train_bodies.csv")
@@ -43,8 +46,24 @@ def load_datasets():
 
 
 def get_accuracy(y_predicted, y_true, stance=False):
-    # if stance == False convert into 2-class-problem
-    y_true_temp = [] # don't use parameters since it will change them by reference
+    """Computes accuracy from the predicted and true labels.
+
+    Parameters
+    ----------
+    y_predicted :
+        Predicted labels
+    y_true : 
+        Ground truth
+    stance : optional
+        If True, uses the stance-related setting, otherwise uses the
+        stance-agnostic setting, by default False
+
+    Returns
+    -------
+        Accuracy score for the specified setting.
+    """
+
+    y_true_temp = []
     y_predicted_temp = []
     if stance == False:
         for y in y_true:
@@ -66,8 +85,24 @@ def get_accuracy(y_predicted, y_true, stance=False):
 
 
 def get_f1score(y_predicted, y_true, stance=False):
-    # if stance == False convert into 2-class-problem
-    y_true_temp = [] # don't use parameters since it will change them by reference
+    """Computes f1 macro score from the predicted and true labels.
+
+    Parameters
+    ----------
+    y_predicted :
+        Predicted labels
+    y_true : 
+        Ground truth
+    stance : optional
+        If True, uses the stance-related setting, otherwise uses the
+        stance-agnostic setting, by default False
+
+    Returns
+    -------
+        F1 macro score for the specified setting.
+    """
+
+    y_true_temp = []
     y_predicted_temp = []
     if stance == False:
         for y in y_true:
@@ -88,28 +123,19 @@ def get_f1score(y_predicted, y_true, stance=False):
         return f1_score(y_true, y_predicted, average='macro')
 
 
-def score_submission(gold_labels, test_labels):
-    score = 0.0
-    cm = [[0, 0, 0, 0],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0]]
+def confusion_matrix_string(cm):
+    """Transform the passed confusion matrix into a printable string.
 
-    for i, (g, t) in enumerate(zip(gold_labels, test_labels)):
-        g_stance, t_stance = g, t
-        if g_stance == t_stance:
-            score += 0.25
-            if g_stance != LABELS.index('unrelated'):
-                score += 0.50
-        if g_stance in RELATED and t_stance in RELATED:
-            score += 0.25
+    Parameters
+    ----------
+    cm :
+        Confusion matrix as numpy array.
 
-        cm[g_stance][t_stance] += 1
-
-    return score, cm
-
-
-def print_confusion_matrix(cm):
+    Returns
+    -------
+        Returns confusion matrix as string.
+    """
+    
     lines = []
     header = "|{:^11}|{:^11}|{:^11}|{:^11}|{:^11}|".format('', *LABELS)
     line_len = len(header)
@@ -128,56 +154,65 @@ def print_confusion_matrix(cm):
     return '\n'.join(lines)
 
 
-def report_score(actual,predicted):
-    score,cm = score_submission(actual,predicted)
-    best_score, _ = score_submission(actual,actual)
+def compute_scores(confusion_mat, i):
+    """Computes f1 and accuracy for the specified class using confusion matrix.
 
-    cm_s = print_confusion_matrix(cm)
-    print("Score: " +str(score) + " out of " + str(best_score) + "\t("+str(score*100/best_score) + "%)")
-    return cm_s, score*100/best_score
+    Parameters
+    ----------
+    confusion_mat :
+        Confusion matrix
+    i : 
+        Class to consider to do one-vs-the-rest calculation.
 
+    Returns
+    -------
+        Returns accuracy and f1 score for the given class.
+    """
 
-def process_cm(confusion_mat, i=0, print_stats=True):
-        # i means which class to choose to do one-vs-the-rest calculation
-        # rows are actual obs whereas columns are predictions
-        tp = confusion_mat[i,i]  # correctly labeled as i
-        fp = confusion_mat[:,i].sum() - tp  # incorrectly labeled as i
-        fn = confusion_mat[i,:].sum() - tp  # incorrectly labeled as non-i
-        tn = confusion_mat.sum().sum() - tp - fp - fn
-        if print_stats:
-            print('TP: {}'.format(tp))
-            print('FP: {}'.format(fp))
-            print('FN: {}'.format(fn))
-            print('TN: {}'.format(tn))
+    tp = confusion_mat[i,i] + 1e-16
+    fp = confusion_mat[:,i].sum() - tp + 1e-16
+    fn = confusion_mat[i,:].sum() - tp + 1e-16
+    tn = confusion_mat.sum().sum() - tp - fp - fn + 1e-16
 
-        prec = tp/(tp+fp)
-        recall = tp/(tp+fn)
-        f1 = 2*(prec*recall)/(prec+recall)
+    prec = tp/(tp+fp)
+    recall = tp/(tp+fn)
+    f1 = 2*(prec*recall)/(prec+recall)
 
-        acc = f"Accuracy class {i} : {(tp+tn)/(tp+tn+fp+fn)}\n"
-        f1_s = f"f1 score class {i} : {f1}\n\n"
+    acc = f"Accuracy class {i} : {(tp+tn)/(tp+tn+fp+fn)}\n"
+    f1_s = f"f1 score class {i} : {f1}\n\n"
 
-        return acc, f1_s
+    return acc, f1_s
 
 
 def save_stats(y_test, predictions, configuration):
+    """Prints the computed stats to a text file in ./results.
+
+    Parameters
+    ----------
+    y_test :
+        Ground truth
+    predictions :
+        Predicted labels
+    configuration : 
+        Configuration dictionary for the used model
+    """
+
     conf_mat = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
     for i in range(0,len(predictions)):
         conf_mat[y_test[i]][predictions[i]] += 1
 
     confusion_matrix = np.array(conf_mat)
 
-    cm_s, score = report_score(y_test, predictions)
+    cm_s = confusion_matrix_string(confusion_matrix)
 
     with open(f"./results/{configuration['model_name']}.txt", 'a') as f:
         f.write(f"Configuration:\n")
         f.write(f"{configuration}\n\n")
 
-        f.write(cm_s)
-        f.write(f"\nScore: {score}\n\n")
+        f.write(f"{cm_s}\n")
 
         for i in range(4):
-            acc, f1_s = process_cm(confusion_matrix, i, print_stats=False)
+            acc, f1_s = compute_scores(confusion_matrix, i)
             f.write(acc)
             f.write(f1_s)
 
