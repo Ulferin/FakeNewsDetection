@@ -1,6 +1,7 @@
 *.ipynb
 *.txt
 models/
+UCLMR/
 outputs/
 runs/
 cache_dir/

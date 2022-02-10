@@ -6,17 +6,24 @@ import torch
 from utils import *
 
 
-# model_name = 'roberta'
-# model_type = "roberta-base"
-# model_name = 'longformer'
-# model_type = "allenai/longformer-base-4096"
+model = 'roberta'  # Configuration to be executed
+saved = True   # Set to True to recover an existing model
 
-proc_count = 8
-do_lower_case = False
 
-configurations = [
+# Best configurations for each of the tested models
+configurations = {
 
-    {
+    'bert': {
+        'model_name': 'bert',
+        'model_type': 'bert-base-uncased',
+        'train_ep': 5,
+        'learning_rate': 3e-5,
+        'max_seq_len': 512,
+        'batch_size': 8,
+        'scheduler': 'linear_schedule_with_warmup',
+        'do_lower_case': True
+    },
+    'roberta': {
         'model_name': 'roberta',
         'model_type': 'roberta-base',
         'train_ep': 5,
@@ -25,30 +32,65 @@ configurations = [
         'pol_dec_pow': 1.2,
         'max_seq_len': 512,
         'batch_size': 4,
-        'scheduler': 'polynomial_decay_schedule_with_warmup'
+        'scheduler': 'polynomial_decay_schedule_with_warmup',
+        'do_lower_case': False
+    },
+    'longformer': {
+        'model_name': 'longformer',
+        'model_type': 'allenai/longformer-base-4096',
+        'train_ep': 5,
+        'learning_rate': 1e-5,
+        'max_seq_len': 512,
+        'batch_size': 4,
+        'scheduler': 'linear_schedule_with_warmup',
+        'do_lower_case': False
+    },
+    'distilbert': {
+        'model_name': 'distilbert',
+        'model_type': 'distilbert-base-uncased',
+        'train_ep': 5,
+        'learning_rate': 3e-5,
+        'max_seq_len': 512,
+        'batch_size': 16,
+        'scheduler': 'linear_schedule_with_warmup',
+        'do_lower_case': True
+    },
+    'deberta': {
+        'model_name': 'deberta',
+        'model_type': 'microsoft/deberta-base',
+        'train_ep': 5,
+        'learning_rate': 5e-6,
+        'pol_dec_end': 1e-7,
+        'pol_dec_pow': 1.0,
+        'max_seq_len': 512,
+        'batch_size': 2,
+        'scheduler': 'polynomial_decay_schedule_with_warmup',
+        'do_lower_case': False
     },
     
-]
-
-ckp = False
-saved = False
+}
 
 X_train, y_train, X_test, y_test = load_datasets()
 
+# Test the specified model and saves results in ./results/model_name.txt
 def train_transformer(configuration):
     model_name = configuration['model_name']
     model_type = configuration['model_type']
     train_ep = configuration['train_ep']
     learning_rate = configuration['learning_rate']
-    pol_dec_end = configuration['pol_dec_end']
-    pol_dec_pow = configuration['pol_dec_pow']
     max_seq_len = configuration['max_seq_len']
     batch_size = configuration['batch_size']
     scheduler = configuration['scheduler']
+    do_lower_case = configuration['do_lower_case']
 
-    save_folder = f'./models/{model_type}_{batch_size}batch_{learning_rate}_{pol_dec_end}_{pol_dec_pow}'
+    if scheduler == 'polynomial_decay_schedule_with_warmup':
+        pol_dec_end = configuration['pol_dec_end']
+        pol_dec_pow = configuration['pol_dec_pow']
+    else:
+        pol_dec_end = 1e-7
+        pol_dec_pow = 1.0
 
-    print(f"Running:\n {configuration}\n\nIt will be saved in: {save_folder}\n")
+    save_folder = f'./models/{model_name}'
 
     # Optional model configuration
     model_args = ClassificationArgs(num_train_epochs=train_ep,
@@ -60,7 +102,6 @@ def train_transformer(configuration):
                                     manual_seed = 42,
                                     reprocess_input_data = True,
                                     overwrite_output_dir = True,
-                                    process_count = proc_count,
                                     train_batch_size = batch_size,
                                     max_seq_length = max_seq_len,
                                     fp16 = True,
@@ -70,66 +111,27 @@ def train_transformer(configuration):
                                     save_optimizer_and_scheduler = False,
                                     scheduler=scheduler
                 )
-    if not ckp:
-        # TODO: magari qui cambiare con "se il modello già esiste su disco"
-        #       invece che basarsi su parametro
-        if not saved:
-            model = ClassificationModel(model_name,
-                                        model_type,
-                                        num_labels = 4,
-                                        use_cuda = torch.cuda.is_available(),
-                                        cuda_device = 0,
-                                        args=model_args
-                    )
-
-            # Train the model
-            model.train_model(X_train)
-            torch.save(model, save_folder)
-        else:
-            print(f"Loading model saved in: {save_folder}")
-            model = torch.load(save_folder)
-
-    else:
+    if not saved:
         model = ClassificationModel(model_name,
-                                    'outputs/checkpoint-32104-epoch-2',
-                                    num_labels=4,
+                                    model_type,
+                                    num_labels = 4,
                                     use_cuda = torch.cuda.is_available(),
                                     cuda_device = 0,
-                                    args=model_args)
+                                    args=model_args
+                )
+
+        # Train the model
         model.train_model(X_train)
+        torch.save(model, save_folder)
+    else:
+        print(f"Loading model saved in: {save_folder}")
+        model = torch.load(save_folder)
 
     # Make predictions with the model
     predictions, _ = model.predict(X_test)
 
 
-    conf_mat = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
-    for i in range(0,len(predictions)):
-        conf_mat[y_test[i]][predictions[i]] += 1
+    save_stats(y_test, predictions, configuration)
 
-    confusion_matrix = np.array(conf_mat)
 
-    cm_s, score = report_score(y_test, predictions)
-
-    with open(f"./results/{model_type}.txt", 'a') as f:
-        f.write(f"Configuration:\n")
-        f.write(f"{configuration}\n\n")
-
-        f.write(cm_s)
-        f.write(f"\nScore: {score}\n\n")
-
-        for i in range(4):
-            acc, f1_s = process_cm(confusion_matrix, i, print_stats=False)
-            f.write(acc)
-            f.write(f1_s)
-
-        f.write("\n")
-        f.write("----- Model accuracy -----\n")
-        f.write(f"Per stance accuracy: {get_accuracy(predictions, y_test, stance=True)}\n")
-        f.write(f"Related/Unrelated accuracy: {get_accuracy(predictions, y_test, stance=False)}\n")
-
-        f.write("----- Model f1 -----\n")
-        f.write(f"Per stance f1 macro: {get_f1score(predictions, y_test, stance=True)}\n")
-        f.write(f"Related/Unrelated f1 macro: {get_f1score(predictions, y_test, stance=False)}\n\n\n")
-
-for conf in configurations:
-    train_transformer(conf)
+train_transformer(configurations[model])
